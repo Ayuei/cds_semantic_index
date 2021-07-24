@@ -36,7 +36,6 @@ sentence-transformers==2.0.0
 sentencepiece==0.1.96
 six==1.16.0
 smart-open==5.1.0
-spacy==3.1.1
 spacy-legacy==3.0.8
 srsly==2.4.1
 thinc==8.0.8
@@ -52,3 +51,5 @@ typing-extensions==3.10.0.0
 urllib3==1.26.6
 wasabi==0.8.2
 wrapt==1.12.1
+https://s3-us-west-2.amazonaws.com/ai2-s2-scispacy/releases/v0.4.0/en_core_sci_sm-0.4.0.tar.gz
+jsonlines
