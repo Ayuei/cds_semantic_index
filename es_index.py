@@ -8,12 +8,17 @@ import sentence_transformers
 import spacy
 from typing import List, Union
 import jsonlines
+import sys
+import os
+import json
+
 
 INDEX_NAME = "test_trials"
-DOCUMENT_FP = "es_index.json"
 MODEL_FP = "model/"
+NUMBER= sys.argv[1]
+DOCUMENT_FP = "es_index.json0"+NUMBER
 
-es = elasticsearch.AsyncElasticsearch([{'host': "192.168.20.29"}])
+es = elasticsearch.AsyncElasticsearch([{'host': "10.62.134.3"}])
 sentence_encoder = sentence_transformers.SentenceTransformer(MODEL_FP)
 nlp = spacy.load("en_core_sci_sm")
 nlp.max_length = 2000000
@@ -42,9 +47,7 @@ async def update_mappings():
     await es.indices.put_mapping(body={"properties": mapping}, index=INDEX_NAME)
 
 
-async def encode_field(field: Union[str, List[str]] = None):
-    await asyncio.sleep(0.1)
-
+def encode_field(field: Union[str, List[str]] = None):
     if field:
         embeddings = sentence_encoder.encode(field, convert_to_tensor=True)
 
@@ -72,9 +75,7 @@ def add_field(document, field, value):
     document[field] = value
 
 
-async def encode_document(document):
-    await asyncio.sleep(0.1)
-
+def encode_document(document):
     update_document = {}
 
     for field in best_fields:
@@ -83,7 +84,7 @@ async def encode_document(document):
         if field.endswith('Textblock') and embed_field:
             embed_field = [' '.join(sent.text.split()) for sent in nlp(embed_field).sents if sent.text.strip()]
 
-        embedding = await encode_field(embed_field)
+        embedding = encode_field(embed_field)
 
         if embedding:
             add_field(update_document, field, embedding)
@@ -93,22 +94,28 @@ async def encode_document(document):
 
 async def index_documents(parsed_ids, document_itr, index_name):
     await update_mappings()
-    with open('parsed_ids.txt', 'a+') as parsed_writer:
-        for document in tqdm.tqdm(document_itr, total=2.03e5):
+    with open('parsed_ids.txt'+NUMBER, 'a+') as parsed_writer:
+        for document in tqdm.tqdm(document_itr, total=2.03e5//7):
+            document = json.loads(document)
             _id = document['_id']
 
-            document = document['_source']
+            try:
+                document = document['_source']
 
-            if _id in parsed_ids:
-                continue
+                if _id+"\n" in parsed_ids:
+                    print(f'Skipping {_id}')
+                    continue
 
-            update_document = await encode_document(document)
-            await es.update(index=index_name, id=_id, body={'doc': update_document})
-            parsed_writer.write(f"{_id}\n")
+                update_document = encode_document(document)
+                await es.update(index=index_name, id=_id, body={'doc': update_document})
+                parsed_writer.write(f"{_id}\n")
+            except Exception as e:
+                print(f"Cannot parse {_id}: {e}")
 
 
 if __name__ == "__main__":
-    document_reader = jsonlines.open(DOCUMENT_FP)
-    parsed_ids = open("parsed_ids.txt", "r+").readlines()
+    #document_reader = reverse_readline(DOCUMENT_FP)
+    document_reader = open(DOCUMENT_FP, "r")
+    parsed_ids = open("parsed_ids.txt"+NUMBER, "r+").readlines()
 
     asyncio.run(index_documents(parsed_ids, document_itr=document_reader, index_name=INDEX_NAME))
